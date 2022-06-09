@@ -82,7 +82,33 @@ func validateProviderConfigs(parentCall *ModuleCall, cfg *Config, noProviderConf
 	}
 
 	if mod.ProviderRequirements != nil {
+
+		// Track all known local types too to ensure we don't have duplicated
+		// with different local names.
+		localTypes := map[string]bool{}
+
 		for _, req := range mod.ProviderRequirements.RequiredProviders {
+			if localTypes[req.Type.String()] {
+				// find the last declaration to give a better error
+				prevDecl := ""
+				for localName, typ := range localNames {
+					if typ.Equals(req.Type) {
+						prevDecl = localName
+					}
+				}
+
+				diags = append(diags, &hcl.Diagnostic{
+					Severity: hcl.DiagError,
+					Summary:  "Duplicate required provider",
+					Detail: fmt.Sprintf(
+						"Provider %s with the local name %q was previously required as %q. A provider can only be required once within required_providers.",
+						req.Type.ForDisplay(), req.Name, prevDecl,
+					),
+					Subject: &req.DeclRange,
+				})
+			}
+			localTypes[req.Type.String()] = true
+
 			localNames[req.Name] = req.Type
 			for _, alias := range req.Aliases {
 				addr := addrs.AbsProviderConfig{
