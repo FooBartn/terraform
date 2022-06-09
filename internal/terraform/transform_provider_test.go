@@ -446,6 +446,39 @@ provider["registry.terraform.io/hashicorp/test"].z`
 	}
 }
 
+func TestProviderConfigTransformer_duplicateLocalName(t *testing.T) {
+	mod := testModuleInline(t, map[string]string{
+		"main.tf": `
+terraform {
+  required_providers {
+    dupe = {
+      source = "registry.terraform.io/hashicorp/test"
+    }
+  }
+}
+
+provider "test" {
+}
+`})
+	concrete := func(a *NodeAbstractProvider) dag.Vertex { return a }
+
+	g := testProviderTransformerGraph(t, mod)
+	tf := ProviderConfigTransformer{
+		Config:   mod,
+		Concrete: concrete,
+	}
+	if err := tf.Transform(g); err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	expected := `provider["registry.terraform.io/hashicorp/test"]`
+
+	actual := strings.TrimSpace(g.String())
+	if actual != expected {
+		t.Fatalf("expected:\n%s\n\ngot:\n%s", expected, actual)
+	}
+}
+
 const testTransformProviderBasicStr = `
 aws_instance.web
   provider["registry.terraform.io/hashicorp/aws"]
